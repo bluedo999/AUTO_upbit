@@ -1,4 +1,10 @@
 import pyupbit
+import jwt
+import uuid
+import hashlib
+import requests
+import datetime
+from urllib.parse import urlencode
 
 access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
 secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
