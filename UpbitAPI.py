@@ -8,12 +8,66 @@ from urllib.parse import urlencode
 
 access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
 secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
+server_url = "https://api.upbit.com"
 
 class UpbitAPI:
     def __init__(self, access_key, secret_key):
         self.access_key = access_key
         self.secret_key = secret_key
         self.upbit = pyupbit.Upbit(access_key, secret_key)
+    def _request_headers(self, payload=None):
+        if payload is None:
+            payload = {}
+        payload_str = urlencode(payload)
+        m = hashlib.sha512()
+        m.update(payload_str.encode('utf-8'))
+        b64 = pyupbit.base64.b64encode(m.digest()).decode('utf-8')
+        jwt_payload = {
+            'access_key': self.access,
+            'nonce': str(uuid.uuid4()),
+            'query': payload_str
+        }
+        encoded_jwt = jwt.encode(jwt_payload, self.secret, algorithm='HS256').decode('utf-8')
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer {}'.format(encoded_jwt)
+        }
+    def _request_api(self, end_point, method='GET', params=None, payload=None):
+        url = self.server_url + end_point
+        headers = self._request_headers(payload)
+        res = requests.request(method, url, params=params, headers=headers)
+        try:
+            if 'success' in res.json() and not res.json()['success']:
+                raise Exception(res.json()['error']['message'])
+            return res.json()
+        except ValueError:
+            raise ValueError('API Error')
+    def get_ticker(self, markets):
+        """
+        마켓의 현재가를 얻어옵니다.
+        :param markets: 마켓 코드의 배열
+        :return: 호가 정보 딕셔너리
+        """
+        if not isinstance(markets, list):
+            markets = [markets]
+        query = {
+            'markets': ','.join(markets)
+        }
+        return self._request_api('/v1/ticker', params=query)
+    def buy_market_order(self, market, price):
+        """
+        시장가 매수 주문을 요청합니다.
+        :param market: 마켓 코드(종목 코드)
+        :param price: 주문 가격
+        :return: 주문 정보 딕셔너리
+        """
+        query = {
+            'market': market,
+            'side': 'bid',
+            'price': str(price),
+            'ord_type': 'price',
+        }
+        return self._request_api('/v1/orders', method='POST', params=query)    
     def get_rsi(self, coin, interval="minute30", time=14):
         df = pyupbit.get_ohlcv(coin, interval=interval)
         delta = df["close"].diff()
@@ -167,7 +221,7 @@ class UpbitAPI:
                             self.sell(coin, price, sell_amount)
                         else:
                             raise ValueError("Invalid strategy parameter. Choose either 'fixed', 'macd', or 'breakout_signal'")
-        def get_my_balance(currency):
+    def get_my_balance(currency):
         query = {
             'currency': currency,
         }
@@ -186,30 +240,17 @@ class UpbitAPI:
         headers = {"Authorization": authorize_token}
         res = requests.get(server_url + "/v1/accounts", params=query, headers=headers)
         return res.json()
-    def upbit_buy_order(market, volume, price):
-        query = {
-            'market': market,
-            'side': 'bid',
-            'volume': str(volume),
-            'price': str(price),
-            'ord_type': 'limit',
-        }
-        query_string = urlencode(query).encode()
-        m = hashlib.sha512()
-        m.update(query_string)
-        query_hash = m.hexdigest()
-        payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
-        }
-        jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
-        headers = {"Authorization": authorize_token}
-        res = upbit.post('/v1/orders', params=query)
-        #res = requests.post(server_url + "/v1/order", params=query, headers=headers)
-        return res.json()
+    def upbit_buy_order(ticker: str, price: float, volume: float):
+        access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
+        secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
+        upbit = pyupbit.Upbit(access_key, secret_key)
+        return upbit.buy_limit_order(ticker, price, volume)
+        balance = pyupbit.get_my_balance()
+        krw_balance = float(next(b for b in balance if b['currency'] == 'KRW')['balance'])
+        print("KRW balance:", krw_balance)
+        buy_order = upbit_buy_order("BTC-KRW", 40000000, 0.001)
+        print("Buy order:", buy_order)
+
     if __name__ == "__main__":
-        print("Your balance: ", upbit.get_my_balance("KRW"))
+        print("Your balance: ", get_my_balance("KRW"))
         print("Buy order: ", upbit_buy_order("KRW-BTC", 0.001, 40000000))
