@@ -14,7 +14,7 @@ class UpbitAPI:
     def __init__(self, access_key, secret_key):
         self.access_key = access_key
         self.secret_key = secret_key
-        self.upbit = pyupbit.Upbit(access_key, secret_key)
+        self.server_url = "https://api.upbit.com"
     def _request_headers(self, payload=None):
         if payload is None:
             payload = {}
@@ -250,7 +250,41 @@ class UpbitAPI:
         print("KRW balance:", krw_balance)
         buy_order = upbit_buy_order("BTC-KRW", 40000000, 0.001)
         print("Buy order:", buy_order)
-
+    def upbit_sell_order(ticker: str, price: float, volume: float):
+        access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
+        secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
+        server_url = "https://api.upbit.com"
+        payload = {
+        'access_key': access_key,
+        'nonce': str(uuid.uuid4()),
+        }
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+    # 매도 주문 요청 생성
+        query = {
+            'market': ticker,
+            'side': 'ask', # 판매 주문
+            'volume': str(volume),
+            'price': str(price),
+            'ord_type': 'limit', # 지정가 주문
+        }
+        query_string = urlencode(query).encode()
+        # 생성한 요청 정보로 매도 주문 요청 실행
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        payload = {
+            'access_key': access_key,
+            'nonce': str(uuid.uuid4()),
+            'query_hash': query_hash,
+            'query_hash_alg': 'SHA512',
+        }
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+        res = requests.post(server_url + "/v1/orders", params=query, headers=headers)
+        return res.json()
     if __name__ == "__main__":
         print("Your balance: ", get_my_balance("KRW"))
         print("Buy order: ", upbit_buy_order("KRW-BTC", 0.001, 40000000))
