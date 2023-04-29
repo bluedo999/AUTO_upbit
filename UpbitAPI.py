@@ -161,3 +161,49 @@ class UpbitAPI:
                             self.sell(coin, price, sell_amount)
                         else:
                             raise ValueError("Invalid strategy parameter. Choose either 'fixed', 'macd', or 'breakout_signal'")
+        def get_my_balance(currency):
+        query = {
+            'currency': currency,
+        }
+        query_string = urlencode(query).encode()
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        payload = {
+            'access_key': access_key,
+            'nonce': str(uuid.uuid4()),
+            'query_hash': query_hash,
+            'query_hash_alg': 'SHA512',
+        }
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+        res = requests.get(server_url + "/v1/accounts", params=query, headers=headers)
+        return res.json()
+    def upbit_buy_order(market, volume, price):
+        query = {
+            'market': market,
+            'side': 'bid',
+            'volume': str(volume),
+            'price': str(price),
+            'ord_type': 'limit',
+        }
+        query_string = urlencode(query).encode()
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        payload = {
+            'access_key': access_key,
+            'nonce': str(uuid.uuid4()),
+            'query_hash': query_hash,
+            'query_hash_alg': 'SHA512',
+        }
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+        res = upbit.post('/v1/orders', params=query)
+        #res = requests.post(server_url + "/v1/order", params=query, headers=headers)
+        return res.json()
+    if __name__ == "__main__":
+        print("Your balance: ", upbit.get_my_balance("KRW"))
+        print("Buy order: ", upbit_buy_order("KRW-BTC", 0.001, 40000000))
