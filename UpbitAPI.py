@@ -1,73 +1,244 @@
-import pyupbit
 import jwt
 import uuid
 import hashlib
-import requests
-import datetime
 from urllib.parse import urlencode
+import requests
+import pyupbit
+import datetime
 
 access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
 secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
 server_url = "https://api.upbit.com"
 
 class UpbitAPI:
+    
     def __init__(self, access_key, secret_key):
         self.access_key = access_key
         self.secret_key = secret_key
-        self.server_url = "https://api.upbit.com"
-    def _request_headers(self, payload=None):
-        if payload is None:
-            payload = {}
-        payload_str = urlencode(payload)
-        m = hashlib.sha512()
-        m.update(payload_str.encode('utf-8'))
-        b64 = pyupbit.base64.b64encode(m.digest()).decode('utf-8')
-        jwt_payload = {
-            'access_key': self.access,
-            'nonce': str(uuid.uuid4()),
-            'query': payload_str
-        }
-        encoded_jwt = jwt.encode(jwt_payload, self.secret, algorithm='HS256').decode('utf-8')
-        return {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer {}'.format(encoded_jwt)
-        }
-    def _request_api(self, end_point, method='GET', params=None, payload=None):
-        url = self.server_url + end_point
-        headers = self._request_headers(payload)
-        res = requests.request(method, url, params=params, headers=headers)
+        self.server_url = 'https://api.upbit.com'
+    
+    def get_server_time(self):
+        url = self.server_url + '/v1/server_time'
         try:
-            if 'success' in res.json() and not res.json()['success']:
-                raise Exception(res.json()['error']['message'])
-            return res.json()
-        except ValueError:
-            raise ValueError('API Error')
-    def get_ticker(self, markets):
-        """
-        마켓의 현재가를 얻어옵니다.
-        :param markets: 마켓 코드의 배열
-        :return: 호가 정보 딕셔너리
-        """
-        if not isinstance(markets, list):
-            markets = [markets]
-        query = {
-            'markets': ','.join(markets)
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()['server_time']
+        except Exception as e:
+            print(e)
+            return None
+    
+    def get_accounts(self):
+        payload = {
+            'access_key': self.access_key,
+            'nonce': str(uuid.uuid4())
         }
-        return self._request_api('/v1/ticker', params=query)
-    def buy_market_order(self, market, price):
-        """
-        시장가 매수 주문을 요청합니다.
-        :param market: 마켓 코드(종목 코드)
-        :param price: 주문 가격
-        :return: 주문 정보 딕셔너리
-        """
+
+        jwt_token = jwt.encode(payload, self.secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+
+        res = requests.get(self.server_url + '/v1/accounts', headers=headers)
+        if res.status_code == 200:
+            return res.json()
+        else:
+            return None
+    
+    def get_balance(self, currency):
+        url = self.server_url + '/v1/accounts'
+        try:
+            headers = self.get_authentication_headers('GET', url)
+
+            querystring = urlencode({'currency': currency})
+            res = requests.get(url + '?' + querystring, headers=headers)
+            if res.status_code == 200:
+                return res.json()[0]
+            else:
+                return None
+        except Exception as e:
+            print(str(e))
+            return None
+            
+    def get_ticker(self, markets):
+        url = self.server_url + f"/v1/ticker?markets={markets}"
+        try:
+            querystring = urlencode({'markets': markets})
+            response = requests.get(url, params=querystring)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    
+    def get_authentication_headers(self, method, url):
+        payload = {
+            'access_key': self.access_key,
+            'nonce': str(uuid.uuid4()),
+        }
+
+        if method == 'GET':
+            query_string = urlencode(payload)
+            m = hashlib.sha512()
+            m.update(query_string.encode())
+            query_hash = m.hexdigest()
+            url_path = url + '?' + query_string
+
+        elif method == 'POST':
+            m = hashlib.sha512()
+            m.update(payload.encode())
+            query_hash = m.hexdigest()
+            url_path = url
+
+        payload['query_hash'] = query_hash
+        payload['query_hash_alg'] = 'SHA512'
+        jwt_token = jwt.encode(payload, self.secret_key)
+        authorize_token = 'Bearer {}'.format(jwt_token)
+        headers = {"Authorization": authorize_token}
+        return headers
+    
+    def post_order(self, market, side, volume, price, ord_type='limit'):
         query = {
             'market': market,
-            'side': 'bid',
-            'price': str(price),
-            'ord_type': 'price',
+            'side': side,
+            'volume': volume,
+            'price': price,
+            'ord_type': ord_type,
         }
-        return self._request_api('/v1/orders', method='POST', params=query)    
+        url = self.server_url + '/v1/orders'
+        headers = self.get_authentication_headers('POST', url)
+        res = requests.post(url, headers=headers, json=query)
+        if res.status_code == 201:
+            return res.json()['uuid']
+        else:
+            return None
+        
+    def delete_order(self, uuid):
+        url = self.server_url + f'/v1/order{uuid}'
+        headers = self.get_authentication_headers('DELETE', url)
+        res = requests.delete(url, headers=headers)
+        if res.status_code == 200:
+            return True
+        else:
+            return False
+        
+    def get_orderbook(self, market, count):
+        url = self.server_url + f"/v1/orderbook?markets={market}&count={count}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_trade(self, market, count):
+        url = self.server_url + f"/v1/trades/ticks?market={market}&count={count}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_candles(self, market, time_unit, count, to=None):
+        url = self.server_url + f"/v1/candles/{time_unit}?market={market}&count={count}"
+        if to is not None:
+            url += f"&to={to}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_daily_candles(self, market, to=None):
+        url = self.server_url + f"/v1/candles/days?market={market}"
+        if to is not None:
+            url += f"&to={to}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_minutes_candles(self, market, minutes, count, to=None):
+        url = self.server_url + f"/v1/candles/minutes/{minutes}?market={market}&count={count}"
+        if to is not None:
+            url += f"&to={to}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_order_status(self, market, order_id):
+        url = self.server_url + f"/v1/order/detail?market={market}&order_id={order_id}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def get_balance(self):
+        url = self.server_url + "/v1/wallet/balance"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def place_order(self, market, side, price, size, type):
+        url = self.server_url + "/v1/order"
+        data = {
+            "market": market,
+            "side": side,
+            "price": price,
+            "size": size,
+            "type": type
+        }
+        try:
+            response = requests.post(url, data=data)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+    def cancel_order(self, market, order_id):
+        url = self.server_url + "/v1/order"
+        data = {
+            "market": market,
+            "order_id": order_id
+        }
+        try:
+            response = requests.delete(url, data=data)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(e)
+            return None
+        
     def get_rsi(self, coin, interval="minute30", time=14):
         df = pyupbit.get_ohlcv(coin, interval=interval)
         delta = df["close"].diff()
@@ -79,10 +250,12 @@ class UpbitAPI:
         RS = AU / AD
         RSI = 100.0 - (100.0 / (1.0 + RS))
         return RSI.iloc[-1]
+        
     def get_moving_average(self, coin, time):
         df = pyupbit.get_ohlcv(coin, interval="minute30")
         ma = df['close'].rolling(window=time).mean()
         return ma.iloc[-1]
+    
     def get_bollinger_bands(self, coin, time, multiplier):
         df = pyupbit.get_ohlcv(coin, interval="minute30")
         ma = df['close'].rolling(window=time).mean()
@@ -90,6 +263,7 @@ class UpbitAPI:
         upper = ma + multiplier * mstd
         lower = ma - multiplier * mstd
         return upper.iloc[-1], lower.iloc[-1]
+    
     def get_macd(self, coin):
         df = pyupbit.get_ohlcv(coin, interval="minute30")
         exp1 = df['close'].ewm(span=12, adjust=False).mean()
@@ -97,11 +271,13 @@ class UpbitAPI:
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
         return macd.iloc[-1], signal.iloc[-1]
+    
     def get_breakout_signal(self, coin, time):
         df = pyupbit.get_ohlcv(coin, interval="minute30")
         highest = df["high"].rolling(window=time).max().iloc[-1]
         if pyupbit.get_current_price(coin) > highest:
             return True
+        
     def buy(self, coin, price, amount):
         return self.upbit.buy_limit_order(coin, price, amount)
     def sell(self, coin, price, amount):
@@ -123,9 +299,6 @@ class UpbitAPI:
     def get_order_list(self, state):
         return self.upbit.get_order(state=state)
     def main(self):
-        ##############################
-        ## RSI-based trading system ##
-        ##############################
         coin = "KRW-BTC"
         trading = 100000
         strategy = "RSI"  # "RSI" or "moving_average" or "bollinger_bands" or "macd" or "breakout_signal"
@@ -240,16 +413,24 @@ class UpbitAPI:
         headers = {"Authorization": authorize_token}
         res = requests.get(server_url + "/v1/accounts", params=query, headers=headers)
         return res.json()
+    
     def upbit_buy_order(ticker: str, price: float, volume: float):
         access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
         secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
         upbit = pyupbit.Upbit(access_key, secret_key)
-        return upbit.buy_limit_order(ticker, price, volume)
+        # Place buy limit order
+        buy_result = upbit.buy_limit_order(ticker, price, volume)
+        print("Buy order:", buy_result)
+        # Get KRW balance
         balance = pyupbit.get_my_balance()
-        krw_balance = float(next(b for b in balance if b['currency'] == 'KRW')['balance'])
-        print("KRW balance:", krw_balance)
-        buy_order = upbit_buy_order("BTC-KRW", 40000000, 0.001)
-        print("Buy order:", buy_order)
+        krw_balance = next(filter(lambda x: x["currency"]=="KRW", balance), None)
+        print("Your balance:", balance)
+        # Place limit buy order for Bitcoin
+        if krw_balance is not None and float(krw_balance["balance"]) > 40000000:
+            upbit_buy_order("BTC-KRW", 40000000, 0.001)
+        else:
+            print("Error: Insufficient KRW balance")
+
     def upbit_sell_order(ticker: str, price: float, volume: float):
         access_key = "RtNkYNkqltxtJbE9E9OfI2se4xlWDxxKRx5mrQhO"
         secret_key = "FkougvxZA0nnVet6DdNNktj9vXSjpVnDixfe6sxz"
