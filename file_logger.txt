@@ -1,0 +1,13 @@
+File Operation Logger write: Upbit_Auto_Api.py
+write: C:\Auto-GPT\auto_gpt_workspace\Upbit_Auto_Api.py
+write: C:\Auto-GPT\auto_gpt_workspace\upbit_api.py
+write: Upbit_Auto_RSI_Implementation.txt
+write: Upbit_Auto_Api_GPT_Suggestions.txt
+write: Upbit_Auto_Clone_Suggestions.txt
+write: Upbit_Auto_Clone_Steps.txt
+write: C:\Auto-GPT\auto_gpt_workspace\print_cwd.py
+append: C:\Auto-GPT\auto_gpt_workspace\Upbit_Auto_Api.py
+write: C:\Auto-GPT\auto_gpt_workspace\Upbit_Test_Api.py
+write: C:\Auto-GPT\auto_gpt_workspace\AUTO_upbit\Upbit_Api.py
+write: C:\Auto-GPT\auto_gpt_workspace\change_directory.py
+write: C:\Auto-GPT\auto_gpt_workspace\AUTO_upbit\change_directory.py
