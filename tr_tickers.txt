@@ -1,5 +1,0 @@
-[
-	"KRW-DOGE",
-	"KRW-MFT",
-	"KRW-IQ"
-]
